@@ -1,2 +1,2 @@
-values-secret.yaml
+helm_values/values-secret.yaml
 *.local.yaml
