@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dovecot
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: dovecot
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: dovecot
+  template:
+    metadata:
+      labels:
+        app: dovecot
+    spec:
+      ## Pinned to the same node as the RO source hostPath PV.
+      nodeSelector:
+        kubernetes.io/hostname: {{ .Values.sharedStorage.node }}
+      initContainers:
+        - name: seed-from-yarilo
+          image: alpine:3.20
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync >/dev/null
+              echo "seeding dovecot-data from live yarilo-sb mail tree (read-only source)..."
+              rsync -a --delete /source/ /data/
+              chown -R 1000:1000 /data
+              echo "seed complete: $(du -sh /data | cut -f1)"
+          volumeMounts:
+            - name: yarilo-mail-ro
+              mountPath: /source
+              readOnly: true
+            - name: dovecot-data
+              mountPath: /data
+      containers:
+        - name: dovecot
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+          ports:
+            - containerPort: {{ .Values.protocols.imap.port }}
+              name: imap
+            - containerPort: {{ .Values.protocols.pop3.port }}
+              name: pop3
+            - containerPort: {{ .Values.protocols.lmtp.port }}
+              name: lmtp
+            - containerPort: {{ .Values.protocols.managesieve.port }}
+              name: managesieve
+          volumeMounts:
+            - name: dovecot-data
+              mountPath: {{ .Values.mailRoot }}
+            - name: dovecot-conf
+              mountPath: /etc/dovecot/dovecot.conf
+              subPath: dovecot.conf
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: yarilo-mail-ro
+          persistentVolumeClaim:
+            claimName: dovecot-yarilo-mail-ro
+            readOnly: true
+        - name: dovecot-data
+          persistentVolumeClaim:
+            claimName: dovecot-data
+        - name: dovecot-conf
+          configMap:
+            name: dovecot-conf

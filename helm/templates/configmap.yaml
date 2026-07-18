@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dovecot-conf
+  namespace: {{ .Values.namespace }}
+data:
+  dovecot.conf: |
+    dovecot_config_version = 2.4.0
+    dovecot_storage_version = 2.4.0
+
+    protocols = imap pop3 sieve lmtp
+    listen = *
+
+    ## No TLS — internal-only interop testing, mirrors yarilo's plaintext
+    ## behavior on the backend/session tier (TLS termination in yarilo lives
+    ## on the *-login pods, which this deployment intentionally has no
+    ## equivalent of).
+    ssl = no
+    auth_allow_cleartext = yes
+    default_login_user = nobody
+    default_internal_user = nobody
+    default_internal_group = nogroup
+
+    mail_uid = 1000
+    mail_gid = 1000
+    first_valid_uid = 1000
+    last_valid_uid = 1000
+    first_valid_gid = 1000
+    last_valid_gid = 1000
+
+    ## CRITICAL for interop: 2.4 moved per-folder dbox indexes to
+    ## <index>/mailboxes/<name>/dbox-Mails/ by default. yarilo (like 2.3)
+    ## writes <index>/mailboxes/<name>/ directly — without this, 2.4 opens
+    ## every existing yarilo mailbox as EMPTY with a fresh uidvalidity
+    ## instead of reading what's there. Confirmed against a real prod 2.3->2.4
+    ## migration config (pe-imap-nc-01:/opt/pe-dovecot/config/dovecot.conf).
+    mailbox_directory_name_legacy = yes
+
+    ## Defaults only — overridden per-user by mail_driver/mail_path/
+    ## mail_index_path/mail_home from the SQL userdb query below
+    ## (mbtype-driven: mdbox/maildir/sdbox), same as yarilo's per-user
+    ## storage.mailbox resolution.
+    mail_driver = mdbox
+    mail_path = {{ .Values.mailRoot }}/%{user}/mdbox
+    mail_index_path = {{ .Values.mailRoot }}/%{user}/index
+    mail_home = {{ .Values.mailRoot }}/%{user}
+
+    ## mailbox.password already carries a {SCHEME} prefix (e.g. {BCRYPT}$2b$...) —
+    ## matches how yarilo's own auth/sql passdb reads the same column.
+    passdb sql {
+      driver = sql
+      sql_driver = mysql
+      mysql yarilo {
+        host = {{ .Values.mysql.host }}
+        port = {{ .Values.mysql.port }}
+        dbname = {{ .Values.mysql.database }}
+        user = {{ .Values.mysql.user }}
+        password = {{ .Values.mysql.password }}
+      }
+      query = SELECT username, password FROM mailbox WHERE username = '%{user}' AND active = 1
+    }
+
+    ## mail_driver/mail_path/mail_index_path/mail_home: 2.4's flat mail_*
+    ## settings are auto-imported from any query column of the same name
+    ## (userdb_fields_import_all, on by default). mbtype drives mail_driver
+    ## exactly like yarilo's own per-user storage.mailbox resolution
+    ## (mdbox/maildir/sdbox), and mail_index_path mirrors yarilo's
+    ## mapStoragePath split (index/ separate from the mail storage tree) —
+    ## see internal/storage/mailbox/mdbox/mdbox.go.
+    userdb sql {
+      driver = sql
+      sql_driver = mysql
+      mysql yarilo {
+        host = {{ .Values.mysql.host }}
+        port = {{ .Values.mysql.port }}
+        dbname = {{ .Values.mysql.database }}
+        user = {{ .Values.mysql.user }}
+        password = {{ .Values.mysql.password }}
+      }
+      query = SELECT username, \
+        mbtype AS mail_driver, \
+        CONCAT('{{ .Values.mailRoot }}/', domain, '/', username, '/', mbtype) AS mail_path, \
+        CONCAT('{{ .Values.mailRoot }}/', domain, '/', username, '/index') AS mail_index_path, \
+        CONCAT('{{ .Values.mailRoot }}/', domain, '/', username) AS mail_home, \
+        1000 AS mail_uid, 1000 AS mail_gid \
+        FROM mailbox WHERE username = '%{user}' AND active = 1
+    }
+
+    protocol imap {
+      mail_plugins {
+        imap_sieve = yes
+      }
+    }
+
+    protocol lmtp {
+      mail_plugins {
+        sieve = yes
+      }
+    }
+
+    service imap-login {
+      inet_listener imap {
+        port = {{ .Values.protocols.imap.port }}
+      }
+      inet_listener imaps {
+        port = 0
+      }
+    }
+
+    service pop3-login {
+      inet_listener pop3 {
+        port = {{ .Values.protocols.pop3.port }}
+      }
+      inet_listener pop3s {
+        port = 0
+      }
+    }
+
+    service managesieve-login {
+      inet_listener sieve {
+        port = {{ .Values.protocols.managesieve.port }}
+      }
+    }
+
+    service lmtp {
+      inet_listener lmtp {
+        port = {{ .Values.protocols.lmtp.port }}
+      }
+    }
+
+    sieve_script personal {
+      type = personal
+      driver = file
+      path = {{ .Values.mailRoot }}/%{domain}/%{user}/sieve
+      active_path = %{mail_home}/.dovecot.sieve
+    }
+
+    log_path = /dev/stdout
+    info_log_path = /dev/stdout
+    debug_log_path = /dev/stdout
+    auth_verbose = yes
+    mail_debug = yes

@@ -1,0 +1,68 @@
+## dovecot Helm chart values — real Dovecot 2.4, configured to mirror the
+## yarilo sandbox (yarilo-sb) as closely as possible: same MySQL auth schema
+## (mailbox/domain/alias tables), same on-disk mail_home layout, same mdbox
+## format. Used exclusively for wire-format interop verification against
+## yarilo — not a production mail server.
+
+image:
+  repository: dovecot/dovecot
+  tag: "2.4.4"
+  pullPolicy: IfNotPresent
+
+namespace: dovecot
+
+## MySQL — points at the SAME auth database yarilo-sb uses (namespace: db,
+## StatefulSet mysql, database "yarilo", table mailbox/domain/alias). See
+## igorru_dns/testing/yarilo/helm_values/mysql-sandbox.yaml for the schema
+## and igorru_dns/testing/yarilo/hack/db/mysql-values.yaml for background.
+## Passwords are already {BCRYPT}-hashed in mailbox.password — Dovecot's SQL
+## passdb recognizes the {SCHEME} prefix natively, no default_pass_scheme
+## override needed.
+##
+## mysql.password is intentionally left empty here — never commit it.
+## Pass it at deploy time instead, matching whatever
+## helm_values/mysql-sandbox.yaml's mysql Secret MYSQL_PASSWORD currently is:
+##   helm upgrade --install dovecot helm --set mysql.password="$MYSQL_PW"
+## or keep a local, gitignored values-secret.yaml with just:
+##   mysql: { password: "..." }
+## and pass -f values-secret.yaml.
+mysql:
+  host: mysql.db.svc.cluster.local
+  port: 3306
+  database: yarilo
+  user: yarilo
+  password: ""
+
+## Mail storage root — identical to yarilo's storage.maildir_root +
+## mail_home_template ("%d/%u"), so home resolves to the exact same path
+## yarilo itself uses: <mailRoot>/<domain>/<user@domain>.
+mailRoot: /var/mail/vhosts
+
+## Bound read-only to the SAME underlying hostPath backing yarilo-sb's
+## "yarilo-mail" PVC, so this pod sees the live yarilo mail tree without
+## a second copy. RWO hostpath storageClass can't be shared cross-namespace
+## via a second dynamically-provisioned PVC, so this is a static PV pinned
+## to the exact same node + hostPath, mounted readOnly.
+sharedStorage:
+  hostPath: /var/snap/microk8s/common/default-storage/yarilo-sb-yarilo-mail-pvc-522983df-c0cf-494d-bc6e-080a88ecaf2f
+  node: sb-k8s-01
+  size: 10Gi
+
+## Protocol listeners — plaintext only (ClusterIP-internal interop testing,
+## no external DNS/cert needed, unlike yarilo's TLS-terminating login tier).
+protocols:
+  imap:
+    port: 143
+  pop3:
+    port: 110
+  lmtp:
+    port: 24
+  managesieve:
+    port: 4190
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 512Mi

@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dovecot-yarilo-mail-ro
+spec:
+  capacity:
+    storage: {{ .Values.sharedStorage.size }}
+  accessModes: ["ReadOnlyMany"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: dovecot-shared-hostpath
+  hostPath:
+    path: {{ .Values.sharedStorage.hostPath }}
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - {{ .Values.sharedStorage.node }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dovecot-yarilo-mail-ro
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes: ["ReadOnlyMany"]
+  storageClassName: dovecot-shared-hostpath
+  volumeName: dovecot-yarilo-mail-ro
+  resources:
+    requests:
+      storage: {{ .Values.sharedStorage.size }}
+---
+## Dovecot's OWN writable copy — an initContainer seeds this from the
+## read-only yarilo mount above on every pod start. Dovecot reads/writes
+## freely here (force-resync, rebuilds, LMTP delivery, sieve) without any
+## risk of touching yarilo-sb's live data. Re-seeding on restart means a
+## fresh interop test always starts from the current live yarilo state.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dovecot-data
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ .Values.sharedStorage.size }}
