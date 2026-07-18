@@ -25,23 +25,21 @@ Not a production mail server. No TLS, no HA, single replica.
 ## Deploy
 
 ```sh
+cp helm_values/values-secret.example.yaml helm_values/values-secret.yaml
+# fill in mysql.password in the copy — matches
+# igorru_dns/testing/yarilo/helm_values/mysql-sandbox.yaml's mysql Secret
+# MYSQL_PASSWORD. helm_values/values-secret.yaml is gitignored, never commit it.
+
 helm upgrade --install dovecot helm \
   --kubeconfig ~/.kube/ihorru-sbox-nc.yaml \
-  --set mysql.password="<mysql yarilo user password>"
+  -f helm_values/values-sandbox.yaml \
+  -f helm_values/values-secret.yaml
 ```
 
-The MySQL password matches whatever is currently set in
-`igorru_dns/testing/yarilo/helm_values/mysql-sandbox.yaml`'s `mysql` Secret
-(`MYSQL_PASSWORD`). It is **never committed** — `values.yaml` ships an empty
-default; pass it via `--set` at deploy time, or keep a local
-`values-secret.yaml` (gitignored) with just:
-
-```yaml
-mysql:
-  password: "..."
-```
-
-and add `-f values-secret.yaml` to the command above.
+`helm_values/values-sandbox.yaml` holds the non-secret sandbox overrides
+(MySQL host/db/user, mail root, shared-storage hostPath/node). `values.yaml`
+at the chart root only carries chart-wide defaults — deploy-target specifics
+belong in `helm_values/`, mirroring the yarilo repo's own convention.
 
 ## Values
 

@@ -1,0 +1,21 @@
+## dovecot sandbox overrides — deploy target: ihorru-sbox-nc kubeconfig.
+##
+##   helm upgrade --install dovecot helm \
+##     --kubeconfig ~/.kube/ihorru-sbox-nc.yaml \
+##     -f helm_values/values-sandbox.yaml \
+##     -f helm_values/values-secret.yaml   # gitignored, see below
+##
+## mysql.password is deliberately NOT here — see helm_values/values-secret.example.yaml.
+
+mysql:
+  host: mysql.db.svc.cluster.local
+  port: 3306
+  database: yarilo
+  user: yarilo
+
+mailRoot: /var/mail/vhosts
+
+sharedStorage:
+  hostPath: /var/snap/microk8s/common/default-storage/yarilo-sb-yarilo-mail-pvc-522983df-c0cf-494d-bc6e-080a88ecaf2f
+  node: sb-k8s-01
+  size: 10Gi
