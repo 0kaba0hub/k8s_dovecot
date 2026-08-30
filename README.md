@@ -10,7 +10,7 @@ Not a production mail server. No TLS, no HA, single replica.
 
 ## What it does
 
-- Deploys `dovecot/dovecot:2.4.4` in namespace `dovecot`.
+- Deploys `dovecot/dovecot:2.4.5` in namespace `dovecot`.
 - Authenticates against the **same MySQL auth database** yarilo-sb uses
   (`db` namespace, `yarilo` database, `mailbox`/`domain`/`alias` tables) —
   `passdb`/`userdb sql`, with `mail_driver` selected per-user from the
@@ -45,7 +45,7 @@ belong in `helm_values/`, mirroring the yarilo repo's own convention.
 
 | Key | Default | Description |
 |:---|:---|:---|
-| `image.repository` / `image.tag` | `dovecot/dovecot` / `2.4.4` | Dovecot image |
+| `image.repository` / `image.tag` | `dovecot/dovecot` / `2.4.5` | Dovecot image |
 | `namespace` | `dovecot` | Target namespace |
 | `mysql.host` / `mysql.port` / `mysql.database` / `mysql.user` | `mysql.db.svc.cluster.local` / `3306` / `yarilo` / `yarilo` | Same auth DB as yarilo-sb |
 | `mysql.password` | `""` | **Not committed** — pass via `--set` or a gitignored values file |

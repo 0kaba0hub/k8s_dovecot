@@ -17,27 +17,6 @@ spec:
       labels:
         app: dovecot
     spec:
-      ## Pinned to the same node as the RO source hostPath PV.
-      nodeSelector:
-        kubernetes.io/hostname: {{ .Values.sharedStorage.node }}
-      initContainers:
-        - name: seed-from-yarilo
-          image: alpine:3.20
-          command:
-            - sh
-            - -c
-            - |
-              apk add --no-cache rsync >/dev/null
-              echo "seeding dovecot-data from live yarilo-sb mail tree (read-only source)..."
-              rsync -a --delete /source/ /data/
-              chown -R 1000:1000 /data
-              echo "seed complete: $(du -sh /data | cut -f1)"
-          volumeMounts:
-            - name: yarilo-mail-ro
-              mountPath: /source
-              readOnly: true
-            - name: dovecot-data
-              mountPath: /data
       containers:
         - name: dovecot
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -63,10 +42,6 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
-        - name: yarilo-mail-ro
-          persistentVolumeClaim:
-            claimName: dovecot-yarilo-mail-ro
-            readOnly: true
         - name: dovecot-data
           persistentVolumeClaim:
             claimName: dovecot-data
