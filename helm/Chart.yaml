@@ -3,4 +3,4 @@ name: dovecot
 description: Real Dovecot 2.4, configured to mirror yarilo's sandbox setup (same MySQL auth DB, same mdbox layout) for wire-format interop testing.
 type: application
 version: 0.1.0
-appVersion: "2.4.4"
+appVersion: "2.4.5"

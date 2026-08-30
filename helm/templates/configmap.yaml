@@ -140,3 +140,32 @@ data:
     debug_log_path = /dev/stdout
     auth_verbose = yes
     mail_debug = yes
+
+    # ---------- fts: flatcurve/Xapian ----------
+    # Same engine yarilo runs, so a search comparison is like for like rather
+    # than Xapian against nothing. Values taken from the production reference
+    # config (PP-IMAP-CE-01:/opt/pe-dovecot/config/dovecot.conf).
+    mail_plugins {
+      fts = yes
+      fts_flatcurve = yes
+    }
+
+    fts flatcurve {
+      substring_search = yes
+    }
+    fts_autoindex = yes
+    fts_autoindex_max_recent_msgs = 999
+    # Never fall back to a full-mail scan on a stale index: fail fast, so a
+    # measurement reads the index rather than a scan wearing its name.
+    fts_search_read_fallback = no
+    fts_search_add_missing = yes
+    # On config_version 2.4.4 the value 0 means zero, not unlimited.
+    fts_message_max_size = unlimited
+
+    language_filters = normalizer-icu lowercase stopwords
+    language_tokenizers = generic email-address
+    language_tokenizer_generic_algorithm = simple
+    language en {
+      default = yes
+      filters = lowercase english-possessive stopwords
+    }
