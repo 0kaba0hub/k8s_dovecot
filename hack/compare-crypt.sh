@@ -110,7 +110,7 @@ for arm in A1 B1 A2 B2 A3; do
     s=$(date +%s); acked=$(fill_type "$dom" "$from" "$to"); took=$(( $(date +%s) - s ))
     have=0
     for n in $(seq "$from" "$to"); do
-      c=$(k exec "$P" -- doveadm mailbox status -u "u$n@$dom" messages INBOX 2>/dev/null | sed -n 's/messages=//p')
+      c=$(k exec "$P" -- doveadm mailbox status -u "u$n@$dom" messages INBOX 2>/dev/null | sed -n 's/.*messages=\([0-9]*\).*/\1/p')
       have=$((have + ${c:-0}))
     done
     du=$(tools "du -sk \$(for n in \$(seq $from $to); do echo /var/mail/vhosts/$dom/u\$n@$dom; done) 2>/dev/null | awk '{s+=\$1} END {print s}'")
