@@ -60,9 +60,31 @@ protocols:
   managesieve:
     port: 4190
 
+## Sized for an imaptest run (50 clients), the same in every arm of a
+## comparison. The CPU limit is yarilo-imap's on the stand, so one reference
+## pod has what one yarilo session container has; the request stays small, as
+## the stand's single node schedules yarilo's pods beside it.
 resources:
   requests:
-    cpu: 100m
-    memory: 128Mi
+    cpu: 250m
+    memory: 1Gi
   limits:
-    memory: 512Mi
+    cpu: "2"
+    memory: 2Gi
+
+## Process ceiling for the run's clients (imap and lmtp each start one process
+## per connection); far above 50 so no arm queues on it.
+processLimit: 300
+
+## As the yarilo stand's storage.mail_fsync.
+mailFsync: optimized
+
+## mail_crypt with global keys, for the encryption-cost comparison. Off by
+## default. On: Secret secretName carries global.pem (private) and global.pub
+## (public), PEM pkey, X25519 or an EC curve; it is made for a run and deleted
+## after it, never committed. writeAlgorithm empty reads encrypted mail and
+## writes plaintext (the A arm of a comparison with the keys mounted).
+mailCrypt:
+  enabled: false
+  secretName: ""
+  writeAlgorithm: aes-256-gcm-sha256
