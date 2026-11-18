@@ -36,6 +36,11 @@ deploy() { # <write algorithm, empty for plaintext>
   helm --kubeconfig="$KCFG" upgrade dovecot "$CHART" -n default --reuse-values \
     --set mailCrypt.enabled=true --set mailCrypt.secretName=dovecot-mail-crypt \
     --set-string mailCrypt.writeAlgorithm="$1" --wait --timeout 5m >/dev/null || return 1
+  k rollout status deploy/dovecot --timeout=300s >/dev/null || return 1
+  # The running config is the one asked for, or the arm measures the last one.
+  local have
+  have=$(k exec "$(pod)" -- doveconf -h crypt_write_algorithm 2>/dev/null | tr -d '\r')
+  [ "$have" = "$1" ] || { echo "compare-crypt: the pod runs crypt_write_algorithm '$have', not '$1'" >&2; return 1; }
   for _ in $(seq 1 60); do [ -n "$(pod)" ] && return 0; sleep 5; done
   return 1
 }

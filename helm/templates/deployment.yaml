@@ -16,6 +16,10 @@ spec:
     metadata:
       labels:
         app: dovecot
+      annotations:
+        ## dovecot.conf is mounted by subPath, which a ConfigMap change does
+        ## not reach: a new checksum rolls the pod so the new config is read.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       containers:
         - name: dovecot
