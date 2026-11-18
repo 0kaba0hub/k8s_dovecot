@@ -86,6 +86,9 @@ data:
         FROM mailbox WHERE username = '%{user}' AND active = 1
     }
 
+    mail_fsync = {{ .Values.mailFsync }}
+    default_process_limit = {{ .Values.processLimit }}
+
     protocol imap {
       mail_plugins {
         imap_sieve = yes
@@ -97,6 +100,15 @@ data:
         sieve = yes
       }
     }
+    {{- if .Values.mailCrypt.enabled }}
+
+    ## Global keys: the public key encrypts new mail, the private one reads.
+    crypt_write_algorithm = {{ .Values.mailCrypt.writeAlgorithm }}
+    crypt_global_public_key_file = /etc/dovecot/mail-crypt/global.pub
+    crypt_global_private_key main {
+      crypt_private_key_file = /etc/dovecot/mail-crypt/global.pem
+    }
+    {{- end }}
 
     service imap-login {
       inet_listener imap {
@@ -131,8 +143,8 @@ data:
     sieve_script personal {
       type = personal
       driver = file
-      path = {{ .Values.mailRoot }}/%{domain}/%{user}/sieve
-      active_path = %{mail_home}/.dovecot.sieve
+      path = ~/sieve
+      active_path = ~/.dovecot.sieve
     }
 
     log_path = /dev/stdout
@@ -148,6 +160,10 @@ data:
     mail_plugins {
       fts = yes
       fts_flatcurve = yes
+      {{- if .Values.mailCrypt.enabled }}
+      ## Global, not per protocol: the indexer and doveadm read mail too.
+      mail_crypt = yes
+      {{- end }}
     }
 
     fts flatcurve {

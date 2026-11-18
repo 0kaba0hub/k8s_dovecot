@@ -39,6 +39,11 @@ spec:
             - name: dovecot-conf
               mountPath: /etc/dovecot/dovecot.conf
               subPath: dovecot.conf
+            {{- if .Values.mailCrypt.enabled }}
+            - name: mail-crypt
+              mountPath: /etc/dovecot/mail-crypt
+              readOnly: true
+            {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
@@ -48,3 +53,9 @@ spec:
         - name: dovecot-conf
           configMap:
             name: dovecot-conf
+        {{- if .Values.mailCrypt.enabled }}
+        - name: mail-crypt
+          secret:
+            secretName: {{ required "mailCrypt.secretName is required when mailCrypt.enabled" .Values.mailCrypt.secretName }}
+            defaultMode: 0400
+        {{- end }}

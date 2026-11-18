@@ -16,11 +16,10 @@ Not a production mail server. No TLS, no HA, single replica.
   `passdb`/`userdb sql`, with `mail_driver` selected per-user from the
   `mailbox.mbtype` column (`mdbox`/`maildir`/`sdbox`), mirroring yarilo's
   own per-user storage-backend resolution.
-- Operates on **its own writable copy** of yarilo's mail tree: an
-  `initContainer` seeds a dedicated PVC (`dovecot-data`) from a read-only
-  mount of the same underlying hostPath backing yarilo-sb's `yarilo-mail`
-  PVC, on every pod start. Live yarilo-sb data is never mounted read-write
-  and is never at risk from this chart.
+- Operates on **its own mail store**, a dedicated PVC (`dovecot-data`).
+  Nothing is seeded from yarilo: the two share the userdb, not the mail. A
+  comparison run wipes and fills the mailboxes it uses itself. Live yarilo-sb
+  data is never mounted and is never at risk from this chart.
 
 ## Deploy
 
@@ -54,7 +53,12 @@ belong in `helm_values/`, mirroring the yarilo repo's own convention.
 | `sharedStorage.node` | `sb-k8s-01` | Node the source hostPath and this pod are pinned to |
 | `sharedStorage.size` | `10Gi` | Size for both the RO source PV and the writable `dovecot-data` PVC |
 | `protocols.imap.port` / `pop3.port` / `lmtp.port` / `managesieve.port` | `143` / `110` / `24` / `4190` | Plaintext listeners (no TLS — internal interop testing only) |
-| `resources` | `100m/128Mi` request, `512Mi` limit | Pod resource sizing |
+| `resources` | `250m/1Gi` request, `2/2Gi` limit | Sized for imaptest's 50 clients; the CPU limit is yarilo-imap's on the stand |
+| `processLimit` | `300` | `default_process_limit`, far above a run's clients |
+| `mailFsync` | `optimized` | `mail_fsync`, as the yarilo stand's `storage.mail_fsync` |
+| `mailCrypt.enabled` | `false` | `mail_crypt` in the global `mail_plugins` (the indexer and doveadm read mail too), global keys |
+| `mailCrypt.secretName` | `""` | Secret with `global.pem` and `global.pub`, required when enabled |
+| `mailCrypt.writeAlgorithm` | `aes-256-gcm-sha256` | `crypt_write_algorithm`; empty reads encrypted mail and writes plaintext |
 
 ## Known 2.4 gotchas (worth re-checking on any Dovecot version bump)
 
@@ -105,3 +109,24 @@ Or connect over IMAP directly (after a `kubectl -n dovecot port-forward
 svc/dovecot 1143:143`) with the same credentials a yarilo IMAP client would
 use — the `mailbox.password` column is already `{SCHEME}`-prefixed
 (`{BCRYPT}...`), so Dovecot's SQL passdb authenticates against it natively.
+
+## Encryption cost comparison
+
+The reference side of the MAILCRYPT comparison (docs-internal#297): the same
+imaptest as yarilo's window, with `mail_crypt` off and on.
+
+```sh
+KUBECONFIG=~/.kube/ihorru-sbox-nc.yaml bash hack/mailcrypt-keys.sh create
+helm upgrade dovecot helm -n default --kubeconfig ~/.kube/ihorru-sbox-nc.yaml \
+  -f helm_values/values-sandbox.yaml -f helm_values/values-secret.yaml \
+  --set mailCrypt.enabled=true --set mailCrypt.secretName=dovecot-mail-crypt
+# ... the run ...
+helm upgrade dovecot helm -n default ... (without the two --set)
+KUBECONFIG=~/.kube/ihorru-sbox-nc.yaml bash hack/mailcrypt-keys.sh delete
+```
+
+The keys are made for one run under umask 077, an X25519 pair, never printed
+or committed, and deleted after the stand is back on its own values. An A arm
+keeps the keys mounted with `mailCrypt.writeAlgorithm=""`, so it differs from
+a B arm in writing alone. Only one run on the stand at a time: yarilo-sb is
+idle while the reference runs.
