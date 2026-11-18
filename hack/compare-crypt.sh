@@ -33,7 +33,7 @@ pod() { k get pod -l app=dovecot --field-selector=status.phase=Running -o name |
 types="mdbox:d00001.test:1:50:1-20 maildir:d00002.test:51:100:51-70 sdbox:d00003.test:101:150:101-120"
 
 deploy() { # <write algorithm, empty for plaintext>
-  helm --kubeconfig="$KCFG" upgrade dovecot "$CHART" -n default --reuse-values --force-conflicts \
+  helm --kubeconfig="$KCFG" upgrade dovecot "$CHART" -n default --reuse-values \
     --set mailCrypt.enabled=true --set mailCrypt.secretName=dovecot-mail-crypt \
     --set-string mailCrypt.writeAlgorithm="$1" --wait --timeout 5m >/dev/null || return 1
   for _ in $(seq 1 60); do [ -n "$(pod)" ] && return 0; sleep 5; done
@@ -43,7 +43,7 @@ deploy() { # <write algorithm, empty for plaintext>
 finish() {
   rc=$?
   echo "== restore: release values without mail_crypt, Secret deleted, tools pod removed"
-  helm --kubeconfig="$KCFG" upgrade dovecot "$CHART" -n default --reuse-values --force-conflicts \
+  helm --kubeconfig="$KCFG" upgrade dovecot "$CHART" -n default --reuse-values \
     --set mailCrypt.enabled=false --wait --timeout 5m >/dev/null && bash "$HERE/mailcrypt-keys.sh" delete
   k delete pod dovecot-tools --ignore-not-found --wait=false >/dev/null
   echo "compare-crypt: ended with status $rc"
